@@ -20,6 +20,7 @@ Currently, it supports the following boards:
 
  - HopeRF HM-TRP
  - HopeRF RF50-DEMO
+ - RFD868p
  - RFD900
  - RFD900u
  - RFD900p
