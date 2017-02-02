@@ -13,7 +13,7 @@ Then you can set you modem from 900range to 868range at the cost of some range, 
 
 ##Is it really working
 
-Read
+Read http://www.bytebang.at/Blog/Changing+the+frequency+of+a+HM-TRP+3DR+Radio
 
 ##Disadvantages
 
