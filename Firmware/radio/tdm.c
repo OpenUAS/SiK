@@ -987,80 +987,81 @@ tdm_init(void)
   
 #define REGULATORY_MAX_WINDOW (((1000000UL/16)*4)/10)
 #define LBT_MIN_TIME_USEC 5000
-  
-  // tdm_build_timing_table();
-  
-  // calculate how many 16usec ticks it takes to send each byte
-  ticks_per_byte = (8+(8000000UL/(air_rate*1000UL)))/16;
-  ticks_per_byte++;
-  
-  // calculate the minimum packet latency in 16 usec units
-  // we initially assume a preamble length of 40 bits, then
-  // adjust later based on actual preamble length. This is done
-  // so that if one radio has antenna diversity and the other
-  // doesn't, then they will both using the same TDM round timings
-  packet_latency = (8+(10/2)) * ticks_per_byte + 13;
-  
-  if (feature_golay) {
-    max_data_packet_length = (MAX_PACKET_LENGTH/2) - (6+sizeof(trailer));
-    
-    // golay encoding doubles the cost per byte
-    ticks_per_byte *= 2;
-    
-    // and adds 4 bytes
-    packet_latency += 4*ticks_per_byte;
-  } else {
-    max_data_packet_length = MAX_PACKET_LENGTH - sizeof(trailer);
-  }
-  
-  // set the silence period to two times the packet latency
-  silence_period = 2*packet_latency;
-  
-  // set the transmit window to allow for 3 full sized packets
-  window_width = 3*(packet_latency+(max_data_packet_length*(uint32_t)ticks_per_byte));
-  
-  // if LBT is enabled, we need at least 3*5ms of window width
-  if (lbt_rssi != 0) {
-    // min listen time is 5ms
-    lbt_min_time = LBT_MIN_TIME_USEC/16;
-    window_width = constrain(window_width, 3*lbt_min_time, window_width);
-  }
-  
-  // the window width cannot be more than 0.4 seconds to meet US
-  // regulations
-  if (window_width >= REGULATORY_MAX_WINDOW && num_fh_channels > 1) {
-    window_width = REGULATORY_MAX_WINDOW;
-  }
-  
-  // user specified window is in milliseconds
-  if (window_width > param_get(PARAM_MAX_WINDOW)*(1000/16)) {
-    window_width = param_get(PARAM_MAX_WINDOW)*(1000/16);
-  }
-  
-  // make sure it fits in the 13 bits of the trailer window
-  if (window_width > 0x1fff) {
-    window_width = 0x1fff;
-  }
-  
-  tx_window_width = window_width;
-  
-  // now adjust the packet_latency for the actual preamble
-  // length, so we get the right flight time estimates, while
-  // not changing the round timings
-  packet_latency += ((settings.preamble_length-10)/2) * ticks_per_byte;
-  
-  // tell the packet subsystem our max packet size, which it
-  // needs to know for MAVLink packet boundary detection
-  i = (tx_window_width - packet_latency) / ticks_per_byte;
-  if (i > max_data_packet_length) {
-    i = max_data_packet_length;
-  }
-  packet_set_max_xmit(i);
-  
-#ifdef TDM_SYNC_LOGIC
-  TDM_SYNC_PIN = false;
-#endif // TDM_SYNC_LOGIC
 
+	// tdm_build_timing_table();
+
+	// calculate how many 16usec ticks it takes to send each byte
+	ticks_per_byte = (8+(8000000UL/(air_rate*1000UL)))/16;
+        ticks_per_byte++;
+
+	// calculate the minimum packet latency in 16 usec units
+	// we initially assume a preamble length of 40 bits, then
+	// adjust later based on actual preamble length. This is done
+	// so that if one radio has antenna diversity and the other
+	// doesn't, then they will both using the same TDM round timings
+	packet_latency = (8+(10/2)) * ticks_per_byte + 13;
+
+	if (feature_golay) {
+		max_data_packet_length = (MAX_PACKET_LENGTH/2) - (6+sizeof(trailer));
+
+		// golay encoding doubles the cost per byte
+		ticks_per_byte *= 2;
+
+		// and adds 4 bytes
+		packet_latency += 4*ticks_per_byte;
+	} else {
+		max_data_packet_length = MAX_PACKET_LENGTH - sizeof(trailer);
+	}
+
+	// set the silence period to two times the packet latency
+        silence_period = 2*packet_latency;
+
+        // set the transmit window to allow for 3 full sized packets
+	window_width = 3*(packet_latency+(max_data_packet_length*(uint32_t)ticks_per_byte));
+
+        // min listen time is 5ms
+        lbt_min_time = LBT_MIN_TIME_USEC/16;
+        
+	// if LBT is enabled, we need at least 3*5ms of window width
+	if (lbt_rssi != 0) {
+		window_width = constrain(window_width, 3*lbt_min_time, window_width);
+	}
+
+	// the window width cannot be more than 0.4 seconds to meet US
+	// regulations
+	if (window_width >= REGULATORY_MAX_WINDOW && num_fh_channels > 1) {
+		window_width = REGULATORY_MAX_WINDOW;
+	}
+
+	// user specified window is in milliseconds
+	if (window_width > param_get(PARAM_MAX_WINDOW)*(1000/16)) {
+		window_width = param_get(PARAM_MAX_WINDOW)*(1000/16);
+	}
+
+	// make sure it fits in the 13 bits of the trailer window
+	if (window_width > 0x1fff) {
+		window_width = 0x1fff;
+	}
+
+	tx_window_width = window_width;
+
+	// now adjust the packet_latency for the actual preamble
+	// length, so we get the right flight time estimates, while
+	// not changing the round timings
+	packet_latency += ((settings.preamble_length-10)/2) * ticks_per_byte;
+
+	// tell the packet subsystem our max packet size, which it
+	// needs to know for MAVLink packet boundary detection
+	i = (tx_window_width - packet_latency) / ticks_per_byte;
+	if (i > max_data_packet_length) {
+		i = max_data_packet_length;
+	}
+	packet_set_max_xmit(i);
+
+#ifdef TDM_SYNC_LOGIC
+        TDM_SYNC_PIN = false;
+#endif // TDM_SYNC_LOGIC
+                
 	// crc_test();
 
 	// tdm_test_timing();

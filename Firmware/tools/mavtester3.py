@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 '''
-test MAVLink performance between two radios
+test MAVLink performance between three radios
 '''
 
 import sys, time, os, threading, Queue
@@ -11,8 +11,9 @@ parser = OptionParser("mavtester.py [options]")
 
 parser.add_option("--baudrate", type='int',
                   help="connection baud rate", default=57600)
-parser.add_option("--port1", default=None, help="serial port 1")
-parser.add_option("--port2", default=None, help="serial port 2")
+parser.add_option("--port1", default=None, help="serial port 1 (GCS)")
+parser.add_option("--port2", default=None, help="serial port 2 (relay)")
+parser.add_option("--port3", default=None, help="serial port 3 (retrieval)")
 parser.add_option("--rate", default=4, type='float', help="initial stream rate")
 parser.add_option("--override-rate", default=1, type='float', help="RC_OVERRIDE rate")
 parser.add_option("--show", action='store_true', default=False, help="show messages")
@@ -32,14 +33,20 @@ if opts.port1 is None or opts.port2 is None:
     sys.exit(1)
 
 # create GCS connection
-gcs = mavutil.mavlink_connection(opts.port1, baud=opts.baudrate, input=True)
+gcs = mavutil.mavlink_connection(opts.port1, baud=opts.baudrate, input=True, source_system=255)
 gcs.setup_logfile('gcs.tlog')
-vehicle = mavutil.mavlink_connection(opts.port2, baud=opts.baudrate, input=False)
-vehicle.setup_logfile('vehicle.tlog')
+
+relay = mavutil.mavlink_connection(opts.port2, baud=opts.baudrate, input=False, source_system=1)
+relay.setup_logfile('relay.tlog')
+
+retrieval = mavutil.mavlink_connection(opts.port3, baud=opts.baudrate, input=False, source_system=2)
+retrieval.setup_logfile('retrieval.tlog')
 
 print("Draining ports")
 gcs.port.timeout = 1
-vehicle.port.timeout = 1
+relay.port.timeout = 1
+retrieval.port.timeout = 1
+
 while True:
     r = gcs.port.read(1024)
     if not r:
@@ -47,19 +54,27 @@ while True:
     print("Drained %u bytes from gcs" % len(r))
     time.sleep(0.01)
 while True:
-    r = vehicle.port.read(1024)
+    r = relay.port.read(1024)
     if not r:
         break
-    print("Drained %u bytes from vehicle" % len(r))
+    print("Drained %u bytes from relay" % len(r))
+    time.sleep(0.01)
+while True:
+    r = retrieval.port.read(1024)
+    if not r:
+        break
+    print("Drained %u bytes from retrieval" % len(r))
     time.sleep(0.01)
 
 if opts.rtscts:
     print("Enabling RTSCTS")
     gcs.set_rtscts(True)
-    vehicle.set_rtscts(True)
+    relay.set_rtscts(True)
+    retrieval.set_rtscts(True)
 else:
     gcs.set_rtscts(False)
-    vehicle.set_rtscts(False)
+    relay.set_rtscts(False)
+    retrieval.set_rtscts(False)
     
 def allow_unsigned(mav, msgId):
     '''see if an unsigned packet should be allowed'''
@@ -77,7 +92,8 @@ if opts.mav20 and opts.key is not None:
     h.update(opts.key)
     key = h.digest()
     gcs.setup_signing(key, sign_outgoing=True, allow_unsigned_callback=allow_unsigned)
-    vehicle.setup_signing(key, sign_outgoing=True, allow_unsigned_callback=allow_unsigned)
+    relay.setup_signing(key, sign_outgoing=True, allow_unsigned_callback=allow_unsigned)
+    retrieval.setup_signing(key, sign_outgoing=True, allow_unsigned_callback=allow_unsigned)
 
 # we use thread based receive to avoid problems with serial buffer overflow in the Linux kernel. 
 def receive_thread(mav, q):
@@ -96,36 +112,52 @@ gcs_thread = threading.Thread(target=receive_thread, args=(gcs, gcs_queue))
 gcs_thread.daemon = True
 gcs_thread.start()
 
-vehicle_queue = Queue.Queue()
-vehicle_thread = threading.Thread(target=receive_thread, args=(vehicle, vehicle_queue))
-vehicle_thread.daemon = True
-vehicle_thread.start()
+relay.queue = Queue.Queue()
+relay.thread = threading.Thread(target=receive_thread, args=(relay, relay.queue))
+relay.thread.daemon = True
+relay.thread.start()
+
+retrieval.queue = Queue.Queue()
+retrieval.thread = threading.Thread(target=receive_thread, args=(retrieval, retrieval.queue))
+retrieval.thread.daemon = True
+retrieval.thread.start()
 
 start_time = time.time()
-last_vehicle_send = time.time()
+last_relay_send = time.time()
+last_retrieval_send = time.time()
 last_gcs_send = time.time()
 last_override_send = time.time()
-vehicle_lat = 0
-gcs_lat = 0
 
-def send_telemetry():
+relay.lat = 0
+retrieval.lat = 0
+gcs_lat = [0]*3
+
+relay.last_send = 0
+retrieval.last_send = 0
+
+relay.received = 0
+retrieval.received = 0
+
+relay.radio_received = 0
+retrieval.radio_received = 0
+
+def send_telemetry(vehicle):
     '''
     send telemetry packets from the vehicle to
     the GCS. This emulates the typical pattern of telemetry in
     ArduPlane 2.75 in AUTO mode
     '''    
-    global last_vehicle_send, vehicle_lat
     now = time.time()
     # send at rate specified by user. This doesn't do rate adjustment yet (APM does adjustment
     # based on RADIO packets)
-    if now - last_vehicle_send < 1.0/opts.rate:
+    if now - vehicle.last_send < 1.0/opts.rate:
         return
-    last_vehicle_send = now
+    vehicle.last_send = now
     time_usec = int((now - start_time) * 1.0e6)
     time_ms = time_usec // 1000
 
     vehicle.mav.heartbeat_send(1, 3, 217, 10, 4, 3)
-    vehicle.mav.global_position_int_send(time_ms, vehicle_lat, 1491642131, 737900, 140830, 2008, -433, 224, 35616)
+    vehicle.mav.global_position_int_send(time_ms, vehicle.lat, 1491642131, 737900, 140830, 2008, -433, 224, 35616)
     vehicle.mav.rc_channels_scaled_send(time_boot_ms=time_ms, port=0, chan1_scaled=280, chan2_scaled=3278, chan3_scaled=-3023, chan4_scaled=0, chan5_scaled=0, chan6_scaled=0, chan7_scaled=0, chan8_scaled=0, rssi=0)
     if opts.mav20:
         vehicle.mav.servo_output_raw_send(time_usec=time_usec, port=0, servo1_raw=1470, servo2_raw=1628, servo3_raw=1479, servo4_raw=1506, servo5_raw=1500, servo6_raw=1556, servo7_raw=1500, servo8_raw=1500,
@@ -146,7 +178,7 @@ def send_telemetry():
     vehicle.mav.hwstatus_send(Vcc=0, I2Cerr=0)
     vehicle.mav.wind_send(direction=27.729429245, speed=5.35723495483, speed_z=-1.92264056206)
 
-    vehicle_lat += 1
+    vehicle.lat += 1
 
 def send_GCS():
     '''
@@ -191,12 +223,12 @@ def process_override(m):
     if latency > stats.latency_max:
         stats.latency_max = latency
     
-def recv_vehicle():
+def recv_vehicle(vehicle):
     '''
     receive packets in the vehicle
     '''
     try:
-        m = vehicle_queue.get(block=False)
+        m = vehicle.queue.get(block=False)
     except Queue.Empty:
         return False
     if m.get_type() == 'BAD_DATA':
@@ -204,16 +236,15 @@ def recv_vehicle():
         return True
     if opts.show:
         print(m)
-    stats.vehicle_received += 1
+    vehicle.received += 1
     if m.get_type() in ['RADIO','RADIO_STATUS']:
         #print('VRADIO: ', str(m))
-        stats.vehicle_radio_received += 1
+        vehicle.radio_received += 1
         stats.vehicle_txbuf = m.txbuf
         stats.vehicle_fixed = m.fixed
     if m.get_type() == 'RC_CHANNELS_OVERRIDE':
         process_override(m)
     return True
-
 
 def recv_GCS():
     '''
@@ -228,10 +259,11 @@ def recv_GCS():
         return True
     if m.get_type() == 'GLOBAL_POSITION_INT':
         global gcs_lat
-        if gcs_lat != m.lat:
-            print("Lost %u GLOBAL_POSITION_INT messages" % (m.lat - gcs_lat))
-            gcs_lat = m.lat
-        gcs_lat += 1
+        src_system = m.get_srcSystem()
+        if gcs_lat[src_system] != m.lat:
+            print("Lost %u GLOBAL_POSITION_INT messages" % (m.lat - gcs_lat[src_system]))
+            gcs_lat[src_system] = m.lat
+        gcs_lat[src_system] += 1
     if opts.show:
         print(m)
     stats.gcs_received += 1        
@@ -250,11 +282,14 @@ class PacketStats(object):
     '''
     def __init__(self):
         self.gcs_sent = 0
-        self.vehicle_sent = 0
+        self.relay_sent = 0
+        self.retrieval_sent = 0
         self.gcs_received = 0
-        self.vehicle_received = 0
+        relay.received = 0
+        retrieval.received = 0
         self.gcs_radio_received = 0
-        self.vehicle_radio_received = 0
+        relay.radio_received = 0
+        retrieval.radio_received = 0
         self.gcs_last_bytes_sent = 0
         self.vehicle_last_bytes_sent = 0
         self.latency_count = 0
@@ -272,22 +307,26 @@ class PacketStats(object):
 
     def __str__(self):
         gcs_bytes_sent = gcs.mav.total_bytes_sent - self.gcs_last_bytes_sent
-        vehicle_bytes_sent = vehicle.mav.total_bytes_sent - self.vehicle_last_bytes_sent
+        total_sent = relay.mav.total_bytes_sent + retrieval.mav.total_bytes_sent
+        vehicle_bytes_sent = total_sent - self.vehicle_last_bytes_sent
         self.gcs_last_bytes_sent = gcs.mav.total_bytes_sent
-        self.vehicle_last_bytes_sent = vehicle.mav.total_bytes_sent
+        self.vehicle_last_bytes_sent = total_sent
 
         avg_latency = 0
         if stats.latency_count != 0:
             avg_latency = stats.latency_total / stats.latency_count
         
-        return "Veh:%u/%u/%u  GCS:%u/%u/%u  pend:%u rates:%u/%u lat:%u/%u/%u bad:%u/%u txbuf:%u/%u loss:%u:%u%%/%u:%u%% fixed:%u/%u" % (
-            self.vehicle_sent,
-            self.vehicle_received,
-            self.vehicle_received - self.vehicle_radio_received,
+        return "Rel:%u/%u/%u  Ret:%u/%u/%u  GCS:%u/%u/%u  pend:%u rates:%u/%u lat:%u/%u/%u bad:%u/%u txbuf:%u/%u loss:%u:%u%%/%u:%u%%/%u:%u%% fixed:%u/%u" % (
+            self.relay_sent,
+            relay.received,
+            relay.received - relay.radio_received,
+            self.retrieval_sent,
+            retrieval.received,
+            retrieval.received - retrieval.radio_received,
             self.gcs_sent,
             self.gcs_received,
             self.gcs_received - self.gcs_radio_received,
-            self.vehicle_sent - (self.gcs_received - self.gcs_radio_received),
+            (self.relay_sent + self.retrieval_sent) - (self.gcs_received - self.gcs_radio_received),
             gcs_bytes_sent,
             vehicle_bytes_sent,
             stats.latency_min,
@@ -299,8 +338,10 @@ class PacketStats(object):
             self.gcs_txbuf,
             gcs.mav_loss,
             gcs.packet_loss(),
-            vehicle.mav_loss,
-            vehicle.packet_loss(),
+            relay.mav_loss,
+            relay.packet_loss(),
+            retrieval.mav_loss,
+            retrieval.packet_loss(),
             stats.vehicle_fixed,
             stats.gcs_fixed)
                                  
@@ -313,15 +354,18 @@ stats = PacketStats()
 
 while True:
 
-    send_telemetry()
-    stats.vehicle_sent = vehicle.mav.total_packets_sent
+    send_telemetry(relay)
+    send_telemetry(retrieval)
+    stats.relay_sent = relay.mav.total_packets_sent
+    stats.retrieval_sent = retrieval.mav.total_packets_sent
 
     send_GCS()
     send_override()
     stats.gcs_sent = gcs.mav.total_packets_sent
 
     while True:
-        recv1 = recv_vehicle()
+        recv1 = recv_vehicle(relay)
+        recv1 = recv_vehicle(retrieval)
         recv2 = recv_GCS()
         if not recv1 and not recv2:
             break
