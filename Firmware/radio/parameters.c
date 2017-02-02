@@ -69,9 +69,9 @@ __code const struct parameter_info {
 	{"LBT_RSSI",        0},
 	{"MANCHESTER",      0},
 	{"RTSCTS",          0},
-  {"MAX_WINDOW",    131},
+	{"MAX_WINDOW",    131},
 #ifdef INCLUDE_AES
-  {"ENCRYPTION_LEVEL", 0}, // no Enycryption (0), 128 or 256 bit key
+	{"ENCRYPTION_LEVEL", 0}, // no Enycryption (0), 128 or 256 bit key
 #endif
 };
 
@@ -210,8 +210,6 @@ param_set(__data enum ParamID param, __pdata param_t value)
 		break;
 
 	case PARAM_OPPRESEND:
-		feature_opportunistic_resend = value?true:false;
-		value = feature_opportunistic_resend?1:0;
 		break;
 
 	case PARAM_RTSCTS:
