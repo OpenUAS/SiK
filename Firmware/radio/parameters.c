@@ -54,22 +54,27 @@ __code const struct parameter_info {
 	const char	*name;
 	param_t		default_value;
 } parameter_info[PARAM_MAX] = {
-	{"FORMAT",         PARAM_FORMAT_CURRENT},
-	{"SERIAL_SPEED",   57}, // match APM default of 57600
-	{"AIR_SPEED",      64}, // relies on MAVLink flow control
-	{"NETID",          25},
-	{"TXPOWER",        20},
-	{"ECC",             0},
-	{"MAVLINK",         1},
-	{"OPPRESEND",       0},
-	{"MIN_FREQ",        0},
-	{"MAX_FREQ",        0},
-	{"NUM_CHANNELS",    0},
-	{"DUTY_CYCLE",    100},
-	{"LBT_RSSI",        0},
-	{"MANCHESTER",      0},
-	{"RTSCTS",          0},
-	{"MAX_WINDOW",    131},
+	{"FORMAT", PARAM_FORMAT_CURRENT},
+	{"SERIAL_SPEED",     57}, // match default of 57600
+	{"AIR_SPEED",        64}, // relies on MAVLink flow control
+	{"NETID",            25},
+	{"TXPOWER",          20}, // FIXME: Debate: Is it good to set max output as default
+	{"ECC",               0},
+	{"MAVLINK",           1}, // FIXME: Debate: Is it good to have not transparent as default
+	{"OPPRESEND",         0}, // FIXME: Debate: Is it good to have no op resend
+	{"MIN_FREQ",          0},
+	{"MAX_FREQ",          0},
+	{"NUM_CHANNELS",      0},
+	{"DUTY_CYCLE",      100},
+	{"LBT_RSSI",          0},
+	{"MANCHESTER",        0},
+	{"RTSCTS",            0},
+#ifndef FLEX_FREQ
+	{"MAX_WINDOW",		131},
+#else
+	{"MAIN_FREQ", FREQ_NONE}, // MAX_WINDOW traded in. Note that the mainfreq is not overridden by default, we're so polite ;)
+#endif
+
 #ifdef INCLUDE_AES
 	{"ENCRYPTION_LEVEL", 0}, // no Enycryption (0), 128 or 256 bit key
 #endif
@@ -91,11 +96,11 @@ __xdata param_t	parameter_values[PARAM_MAX];
 __code const pins_user_info_t pins_defaults = PINS_USER_INFO_DEFAULT;
 __xdata pins_user_info_t pin_values[PIN_MAX];
 
-// Place the start away from the other params to allow for expantion 2<<7 = 256
+// Place the start away from the other params to allow for expansion 2<<7 = 256
 #define PIN_FLASH_START       (2<<7)
 #define PIN_FLASH_END         (PIN_FLASH_START + sizeof(pin_values) + 3)
 
-// Check to make sure the End of the r and the beginning of pins dont overlap
+// Check to make sure the End of the r and the beginning of pins don't overlap
 typedef char r2pCheck[(PARAM_FLASH_END < PIN_FLASH_START) ? 0 : -1];
 #else // PIN_MAX
 #define PIN_FLASH_END PARAM_FLASH_END
@@ -159,6 +164,8 @@ param_check(__pdata enum ParamID id, __data uint32_t val)
 			return false;
 		break;
 
+#ifndef FLEX_FREQ
+
 	case PARAM_MAX_WINDOW:
 		// 131 milliseconds == 0x1FFF 16 usec ticks,
 		// which is the maximum we can handle with a 13
@@ -167,6 +174,14 @@ param_check(__pdata enum ParamID id, __data uint32_t val)
 			return false;
 		break;
 
+#else
+
+	case PARAM_MAIN_FREQ:
+			if (val != 0x43 || val != 0x47 || val != 0x86 || val != 0x91)
+				return false;
+			break;
+
+#endif
 	default:
 		// no sanity check for this value
 		break;

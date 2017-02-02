@@ -1033,10 +1033,16 @@ tdm_init(void)
 		window_width = REGULATORY_MAX_WINDOW;
 	}
 
+#ifndef FLEX_FREQ //Quick n dirty for now
 	// user specified window is in milliseconds
 	if (window_width > param_get(PARAM_MAX_WINDOW)*(1000/16)) {
 		window_width = param_get(PARAM_MAX_WINDOW)*(1000/16);
 	}
+#else
+	if (window_width > 8188) { // 8188 = 131*(1000/16
+		window_width = 8188;
+	}
+#endif
 
 	// make sure it fits in the 13 bits of the trailer window
 	if (window_width > 0x1fff) {

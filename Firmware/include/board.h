@@ -118,4 +118,6 @@
 # error Must define a BOARD_ value before including this file.
 #endif
 
+#define FLEX_FREQ 1
+
 #endif // _BOARD_H_
