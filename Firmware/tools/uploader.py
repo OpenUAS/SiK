@@ -324,7 +324,7 @@ class uploader(object):
 	def autosync(self):
 		'''use AT&UPDATE to put modem in update mode'''
 		if self.atbaudrate != 115200:
-			self.port.setBaudrate(self.atbaudrate)
+			self.set_baudrate(self.atbaudrate)
 		print("Trying autosync")
 		self.send('\r\n')
 		time.sleep(1.0)
@@ -342,13 +342,18 @@ class uploader(object):
                         time.sleep(0.7)
                         self.port.flushInput()
                         if self.atbaudrate != 115200:
-                                self.port.setBaudrate(115200)
+                                self.set_baudrate(115200)
                         print("Sent update command")
                         return True
 		if self.atbaudrate != 115200:
-			self.port.setBaudrate(115200)
+			self.set_baudrate(115200)
 		return False
 
+	def set_baudrate(self, baud):
+ 		try:
+ 			self.port.setBaudrate(baud)
+ 		except AttributeError:
+ 			self.port.baudrate = baud
 
 	# verify whether the bootloader is present and responding
 	def check(self):
