@@ -69,10 +69,9 @@ __code const struct parameter_info {
 	{"LBT_RSSI",          0},
 	{"MANCHESTER",        0},
 	{"RTSCTS",            0},
-#ifndef FLEX_FREQ
 	{"MAX_WINDOW",		131},
-#else
-	{"MAIN_FREQ", FREQ_NONE}, // MAX_WINDOW traded in. Note that the mainfreq is not overridden by default, we're so polite ;)
+#ifdef FLEX_FREQ
+	{"MAIN_FREQ", FREQ_NONE}, //Note that the mainfreq is not overridden by default, we're oh so polite ;)
 #endif
 
 #ifdef INCLUDE_AES
@@ -164,8 +163,6 @@ param_check(__pdata enum ParamID id, __data uint32_t val)
 			return false;
 		break;
 
-#ifndef FLEX_FREQ
-
 	case PARAM_MAX_WINDOW:
 		// 131 milliseconds == 0x1FFF 16 usec ticks,
 		// which is the maximum we can handle with a 13
@@ -174,14 +171,11 @@ param_check(__pdata enum ParamID id, __data uint32_t val)
 			return false;
 		break;
 
-#else
+	//case PARAM_MAIN_FREQ:
+	//		if ((val != 0x43) || (val != 0x47) || (val != 0x86) || (val != 0x91))
+	//			return false;
+	//		break;
 
-	case PARAM_MAIN_FREQ:
-			if (val != 0x43 || val != 0x47 || val != 0x86 || val != 0x91)
-				return false;
-			break;
-
-#endif
 	default:
 		// no sanity check for this value
 		break;

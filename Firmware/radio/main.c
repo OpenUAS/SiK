@@ -97,7 +97,7 @@ __pdata struct statistics statistics, remote_statistics;
 
 /// optional features
 bool feature_golay;
-uint8_t feature_mavlink_framing;
+bool feature_mavlink_framing;
 bool feature_rtscts;
 
 void
