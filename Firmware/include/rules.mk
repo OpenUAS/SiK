@@ -5,10 +5,10 @@
 # modification, are permitted provided that the following conditions
 # are met:
 #
-#  o Redistributions of source code must retain the above copyright 
+#  o Redistributions of source code must retain the above copyright
 #    notice, this list of conditions and the following disclaimer.
-#  o Redistributions in binary form must reproduce the above copyright 
-#    notice, this list of conditions and the following disclaimer in 
+#  o Redistributions in binary form must reproduce the above copyright
+#    notice, this list of conditions and the following disclaimer in
 #    the documentation and/or other materials provided with the distribution.
 #
 # THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
@@ -27,7 +27,7 @@
 #
 # Common rules and targets for the HopeRF radio apps
 #
-PPRZLINK_VERSION ?= PPRZLINK_1
+PPRZLINK_VERSION ?= PPRZLINK_2
 
 ifeq ($(BOARD),)
 $(error Must define BOARD before attempting to build)

@@ -632,8 +632,12 @@ tdm_serial_loop(void)
                }
 
 
-               // check if there is enough space in the buffer
-               if ((len+PPRZ_RSSI_LENGTH) < sizeof(pbuf)){
+               // Check if there is enough space in the buffer inject the RSSI data
+// #ifdef INCLUDE_GOLAY    FIXME: and seet if feature_golay is used PPRZ_RSSI_LENGTH*2
+              if ((len+PPRZ_RSSI_LENGTH) < sizeof(pbuf)/2) { //ECC has only half of possible bytes, so if used, half buffer
+// #else
+//              if ((len+PPRZ_RSSI_LENGTH) < sizeof(pbuf))
+// #endif
                  __pdata uint8_t i;
                  for(i=0;i<len-PPRZ_MSG_ID_IDX;i++){
 
@@ -684,24 +688,24 @@ tdm_serial_loop(void)
                      ck_b_tx += ck_a_tx;
                      i++;
 
-#if defined PPRZLINK_2 || defined PPRZLINK_2_GEC
-                     pbuf[i] = PPRZ_GCS_ID; // Dest ID (typically zero for GCS)
+#if defined PPRZLINK_2 || defined PPRZLINK_2_GEC //for Pprzlink v2.0 only
+                     pbuf[i] = PPRZ_GCS_ID; // Dest ID. Typically zero for GCS, fix the code to have different behaviour
                      ck_a_tx += pbuf[i];
                      ck_b_tx += ck_a_tx;
                      i++;
 
-                     pbuf[i] = PPRZ_TELEMETRY_ID; // class/component ID (1 for telemetry)
+                     pbuf[i] = PPRZ_TELEMETRY_ID; // class and component ID 4bit nibble (1 for telemetry)
                      ck_a_tx += pbuf[i];
                      ck_b_tx += ck_a_tx;
                      i++;
-#endif // Pprzlink 2.0 only
+#endif // PPRZLINK_2 or PPRZLINK_2_GEC
 
                      pbuf[i] = PPRZ_RSSI_ID; // MSG ID
                      ck_a_tx += pbuf[i];
                      ck_b_tx += ck_a_tx;
                      i++;
 
-                     pbuf[i] = remote_statistics.average_rssi; // ac rssi
+                     pbuf[i] = remote_statistics.average_rssi; // remote rssi (AC)
                      ck_a_tx += pbuf[i];
                      ck_b_tx += ck_a_tx;
                      i++;
@@ -711,17 +715,17 @@ tdm_serial_loop(void)
                      ck_b_tx += ck_a_tx;
                      i++;
 
-                     pbuf[i] = statistics.average_rssi; // gcs rssi
+                     pbuf[i] = statistics.average_rssi; // local rssi (Typically the GCS)
                      ck_a_tx += pbuf[i];
                      ck_b_tx += ck_a_tx;
                      i++;
 
-                     pbuf[i] = statistics.average_noise; // gcs noise
+                     pbuf[i] = statistics.average_noise; // local  noise (Typically the GCS)
                      ck_a_tx += pbuf[i];
                      ck_b_tx += ck_a_tx;
                      i++;
 
-                     pbuf[i] = remote_statistics.average_noise; // ac noise
+                     pbuf[i] = remote_statistics.average_noise; // remote noise (AC)
                      ck_a_tx += pbuf[i];
                      ck_b_tx += ck_a_tx;
                      i++;
@@ -1161,7 +1165,7 @@ tdm_init(void)
 		window_width = param_get(PARAM_MAX_WINDOW)*(1000/16);
 	}
 
-	// make sure it fits in the 13 bits of the trailer window
+	// to make sure it fits in the 13 bits of the trailer window
 	if (window_width > 0x1fff) {
 		window_width = 0x1fff;
 	}

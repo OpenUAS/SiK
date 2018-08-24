@@ -72,6 +72,10 @@ __code const struct parameter_info {
 	{"MAX_WINDOW",    131},
 	{"PPRZLINK",	    1},
 	{"PPRZLINK_SENDER_ID", 0},
+#ifdef FLEX_FREQ
+	{"MAIN_FREQ", FREQ_NONE}, //Note that the mainfreq is not overridden by default, we're oh so polite ;)
+#endif
+
 #ifdef INCLUDE_AES
 	{"ENCRYPTION_LEVEL", 0}, // no Enycryption (0), 128 or 256 bit key
 #endif
@@ -180,6 +184,11 @@ param_check(__pdata enum ParamID id, __data uint32_t val)
     if (val > 255)
       return false;
     break;
+
+    //case PARAM_MAIN_FREQ:
+	//		if ((val != 0x43) || (val != 0x47) || (val != 0x86) || (val != 0x91))
+	//			return false;
+	//		break;
 
 	default:
 		// no sanity check for this value

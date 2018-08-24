@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # set air data rate
 
-import serial, sys, optparse, time, fdpexpect
+import serial, sys, optparse, time, pexpect
 
 parser = optparse.OptionParser("show_regs")
 parser.add_option("--baudrate", type='int', default=57600, help='baud rate')
@@ -46,4 +46,4 @@ def show_regs(device):
 for d in args:
     print("showing registers on %s" % (d))
     show_regs(d)
-    
+

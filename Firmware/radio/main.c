@@ -112,8 +112,24 @@ main(void)
 	// Stash board info from the bootloader before we let anything touch
 	// the SFRs.
 	//
+#ifndef FLEX_FREQ
 	g_board_frequency = BOARD_FREQUENCY_REG;
+#endif
 	g_board_bl_version = BOARD_BL_VERSION_REG;
+
+#ifdef FLEX_FREQ
+    // Parameter to override the bootloader BOARD_FREQUENCY_REG
+    g_board_frequency = param_get(PARAM_MAIN_FREQ);
+    switch(g_board_frequency) {
+    	case FREQ_433:
+    	case FREQ_470:
+    	case FREQ_868:
+    	case FREQ_915:
+    		break;
+    	default: // Don't override (the default parameter value is FREQ_NONE)
+    		g_board_frequency = BOARD_FREQUENCY_REG;
+	}
+#endif
 
 	// Load parameters from flash or defaults
 	// this is done before hardware_init() to get the serial speed
@@ -317,7 +333,11 @@ radio_init(void)
 	case FREQ_868:
 		freq_min = 868000000UL;
 		freq_max = 870000000UL;
+#ifdef FLEX_FREQ
+		txpower = 20;
+#else
 		txpower = 10;
+#endif
 		num_fh_channels = 10;
 		break;
 	case FREQ_915:
@@ -362,12 +382,22 @@ radio_init(void)
 		freq_max = constrain(freq_max, 450000000UL, 490000000UL);
 		break;
 	case FREQ_868:
+#ifdef FLEX_FREQ
+		freq_min = constrain(freq_min, 849000000UL, 935000000UL);
+		freq_max = constrain(freq_max, 849000000UL, 935000000UL);
+#else
 		freq_min = constrain(freq_min, 849000000UL, 889000000UL);
 		freq_max = constrain(freq_max, 849000000UL, 889000000UL);
+#endif
 		break;
 	case FREQ_915:
+#ifdef FLEX_FREQ
+		freq_min = constrain(freq_min, 849000000UL, 935000000UL);
+		freq_max = constrain(freq_max, 849000000UL, 935000000UL);
+#else
 		freq_min = constrain(freq_min, 868000000UL, 935000000UL);
 		freq_max = constrain(freq_max, 868000000UL, 935000000UL);
+#endif
 		break;
 	default:
 		panic("bad board frequency %d", g_board_frequency);

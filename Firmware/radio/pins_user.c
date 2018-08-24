@@ -92,7 +92,7 @@ pins_user_set_io(__pdata uint8_t pin, bool in_out)
 		pin_values[pin].output = in_out;
 		pin_values[pin].pin_mirror = PIN_NULL;
 		
-		// Esure we are on the Legacy page (SFR Page 0x0)
+		// Ensure we are on the Legacy page (SFR Page 0x0)
 		SFRPAGE	= LEGACY_PAGE;
 		
 		switch(pins_user_map[pin].port)
