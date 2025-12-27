@@ -111,7 +111,7 @@
 #define BOARD_rfd900p
 # include "board_rfd900p.h"
 #elif defined(BOARD_rfd900ue)
-// #define INCLUDE_AES
+//#define INCLUDE_AES
 #define BOARD_rfd900u
 # include "board_rfd900u.h"
 #elif defined(BOARD_ism01a)
@@ -125,5 +125,8 @@
 #else
 # error Must define a BOARD_ value before including this file.
 #endif
+
+/// @brief The FLEX_FREQ is an extra unofficial option to set frequency independent of bootloader settings
+#define FLEX_FREQ 1 
 
 #endif // _BOARD_H_

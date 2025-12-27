@@ -29,12 +29,9 @@
 ///
 /// @file	board_hb1060.h
 ///
-/// Board-specific definitions for the RF50-DEMO board.
+/// Board-specific definitions for the HB1060 board.
 ///
 
-/// @file	board.h
-///		Board definitions for the HB1060 board
- 
 #ifndef _BOARD_HB1060_H
 #define _BOARD_HB1060_H
 

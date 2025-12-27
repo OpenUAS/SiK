@@ -2,6 +2,7 @@
 //
 // Copyright (c) 2012 Andrew Tridgell, All Rights Reserved
 // Copyright (c) 2011 Michael Smith, All Rights Reserved
+// Copyright (c) 2019 OpenUAS, All Rights Reserved
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -438,7 +439,11 @@ link_update(void)
   }
   
   if (unlock_count > 5) {
-    memset(&remote_statistics, 0, sizeof(remote_statistics));
+    // Preserve last-known remote averages; clearing everything makes remote RSSI appear stuck at 0.
+    // If you want to indicate "stale", do it via a separate flag instead of destroying the data.
+    remote_statistics.receive_count = 0;   // if this field exists in struct statistics
+    // Do NOT zero: remote_statistics.average_rssi / average_noise
+    // memset(&remote_statistics, 0, sizeof(remote_statistics)); // removed
   }
   
   test_display = at_testmode;
@@ -501,11 +506,11 @@ void
 tdm_serial_loop(void)
 {
 #ifdef RADIO_SPLAT_TESTING_MODE
-    for (;;) {
-        radio_set_channel(0);
-        radio_transmit(MAX_PACKET_LENGTH, pbuf, 0);
-        //radio_receiver_on();
-    }
+  for (;;) {
+      radio_set_channel(0);
+      radio_transmit(MAX_PACKET_LENGTH, pbuf, 0);
+      //radio_receiver_on();
+  }
 #else
   __pdata uint8_t	len;
   __pdata uint16_t tnow, tdelta;
@@ -516,6 +521,8 @@ tdm_serial_loop(void)
   __pdata uint16_t last_t = timer2_tick();
   __pdata uint16_t last_link_update = last_t;
   
+  __pdata uint16_t last_stats_tick = last_t;
+  static __bit force_stats_send;
 
   _canary = 42;
   
@@ -537,9 +544,11 @@ tdm_serial_loop(void)
       test_display = 0;
     }
     
-    if (seen_mavlink && feature_mavlink_framing && !at_mode_active) {
-      if (MAVLink_report()) {
-        seen_mavlink = 0;
+    if (feature_mavlink_framing) {
+      if (seen_mavlink && !at_mode_active) {
+        if (MAVLink_report()) {
+          seen_mavlink = 0;
+        }
       }
     }
     
@@ -549,6 +558,13 @@ tdm_serial_loop(void)
     // get the time before we check for a packet coming in
     tnow = timer2_tick();
     
+    // Schedule a forced stats send every ~1 second
+    // timer2_tick is 16us ticks; 62500 ticks ≈ 1.0s
+    if ((uint16_t)(tnow - last_stats_tick) >= 62500) {
+      last_stats_tick = tnow;
+      force_stats_send = 1;
+    }
+
     // see if we have received a packet
     if (radio_receive_packet(&len, pbuf)) {
       
@@ -560,13 +576,12 @@ tdm_serial_loop(void)
       statistics.average_rssi = (radio_last_rssi() + 7*(uint16_t)statistics.average_rssi)/8;
       statistics.receive_count++;
       
-      // we're not waiting for a preamble
-      // any more
+      // we're not waiting for a preamble any more
       transmit_wait = 0;
       
-      if (len < 2) {
-        // not a valid packet. We always send
-        // two control bytes at the end of every packet
+      if (len < 2 || len > MAX_PACKET_LENGTH) {
+        // not a valid packet. 
+        // We always send two control bytes at the end of every packet
         continue;
       }
       
@@ -589,44 +604,214 @@ tdm_serial_loop(void)
         last_t = tnow;
         
 
-	// Send data to console (serial buffers) if following conditions met
-	// If is a command and data is destined to THIS modem
-	// OR
-	// data is present, not a command, not a dup and not in AT Mode
-	//
-	// Question: Are we happy to blink Activity lights for RT command results?
+        // Send data to console (serial buffers) if following conditions met
+        // If is a command and data is destined to THIS modem
+        // OR
+        // data is present, not a command, not a dup and not in AT Mode
+        //
+        // Question: Are we happy to blink Activity lights for RT command results?
         if ((trailer.command == 1 && handle_at_command(len)) 
             ||
-            (len != 0 && trailer.command == 0 &&
-             !packet_is_duplicate(len, pbuf, trailer.resend) &&
-             !at_mode_active
+            (len != 0 &&
+            trailer.command == 0 &&
+            !packet_is_duplicate(len, pbuf, trailer.resend) &&
+            !at_mode_active
             )) 
         {
-             // its user data - send it out
-             // the serial port
+        // its user data - send it out
+        // the serial port
 #ifdef INCLUDE_AES
-             crc = crc16(len, pbuf);
-             // Only of CRC's agree do we process the pbuf
-             // (We can't decrypt a packet that is corrupt)
-             if (crc == trailer.crc) {
-                LED_ACTIVITY = LED_ON;
-                serial_decrypt_buf(pbuf, len);
-                LED_ACTIVITY = LED_OFF;
-             } else {
-		if (errors.crc_errors != 0xFFFF) {
-		   errors.crc_errors++; 
-		}
-             }
+        crc = crc16(len, pbuf);
+        // Only of CRC's agree do we process the pbuf
+        // (We can't decrypt a packet that is corrupt)
+        if (crc == trailer.crc) {
+          LED_ACTIVITY = LED_ON;
+          serial_decrypt_buf(pbuf, len);
+          LED_ACTIVITY = LED_OFF;
+        } else {
+          if (errors.crc_errors != 0xFFFF) {
+              errors.crc_errors++; 
+          }
+        }
 #else // INCLUDE_AES
-             LED_ACTIVITY = LED_ON;
-             serial_write_buf(pbuf, len);
-             LED_ACTIVITY = LED_OFF;
+
+        /* The structure of a PPRZLINK 2 message
+
+          PPRZLINK v2
+          PPRZ-message: ABCxxxxxxxDE
+            A PPRZ_STX (0x99)
+            B LENGTH (A->E)
+            C PPRZ_DATA
+              0 SOURCE (~sender_ID)
+              1 DESTINATION (can be a broadcast ID)
+              2 CLASS/COMPONENT
+                bits 0-3: 16 class ID available
+                bits 4-7: 16 component ID available
+              3 MSG_ID
+              4 MSG_PAYLOAD
+              . DATA (messages.xml)
+            D PPRZ_CHECKSUM_A (sum[B->C])
+            E PPRZ_CHECKSUM_B (sum[ck_a])
+            
+        */
+
+        // Inject PPRZLink RSSI and Noise message if feature is enabled
+        if (feature_pprzlink_rssi){
+
+          // Check the ac_id value
+          if (rx_ac_id == 0) {
+            static uint8_t j;
+            for(j = 0; j < len - PPRZ_SENDER_ID_IDX; j++){
+              if (pbuf[j]==PPRZ_STX) {
+                rx_ac_id = pbuf[j + PPRZ_SENDER_ID_IDX];
+                break;
+              }
+            }
+          }
+
+          // First check if there is enough space in the buffer inject the RSSI message data, else there is not use to do the rest anyway
+          // If enough space is available then RSSI data is injected if there is a pong messsage, generated by the AC, available in buffer
+          // Note that a pong message is always generated and send after a receive of a ping message from GCS
+          // So we need to check if there is space for the RSSI message in remaining buffer space after pond data
+    
+// #ifdef INCLUDE_GOLAY    FIXME: and seet if feature_golay is used PPRZ_RSSI_LENGTH*2
+//        if ((len + PPRZ_RSSI_LENGTH) < sizeof(pbuf)/2) { //ECC has only half of possible bytes, so if used, half buffer
+// #else
+          if ((len + PPRZ_RSSI_LENGTH) < sizeof(pbuf)-14 ) { //-8+6 to be sure we have space for checksum and possible trailer
+// #endif
+
+            static uint8_t i;
+            //we go over the buffer to see if there is a pong message but do not need to look into the message itself
+            for(i = 0; i < (len - PPRZ_MSG_ID_IDX) ; i++) {
+
+#if defined PPRZLINK_1 || defined PPRZLINK_2
+              // check if we have
+              // PPRZ_STX header
+              // and PONG_LENGTH
+              // and PONG_ID
+              if (pbuf[i]==PPRZ_STX && // STX byte
+                  pbuf[i+PPRZ_LENGTH_IDX]==PPRZ_PONG_LENGTH && // correct length
+                  pbuf[i+PPRZ_MSG_ID_IDX]==PPRZ_PONG_ID) { // correct ID
+#else
+#if defined PPRZLINK_1_GEC || defined PPRZLINK_2_GEC
+              // check STX
+              // check crypto byte (is encrypted)
+              // check message length
+              if (pbuf[i]==PPRZ_STX && // STX byte
+                    pbuf[i+PPRZ_LENGTH_IDX]==PPRZ_PONG_LENGTH && // correct length
+                    pbuf[i+PPRZ_CRYPTO_BYTE_IDX]==PPRZ_CRYPTO_BYTE_ENCRYPTED) { // correct crypto byte
+#endif // defined PPRZLINK_1_GEC || defined PPRZLINK_2_GEC
+
+#endif // defined PPRZLINK_1 || defined PPRZLINK_2
+
+                // if we land here, we have found a pong message
+
+                // we need to send RSSI, lets just add RSSI after PONG
+                // yeah, sadly we loose the data that comes after a pong message
+                // but that is IMHO less important than getting the RSSI info to the GCS
+                
+                // OK, so we rebuild the packet in pbuf
+
+                // A complete Pong message was already in the buffer, skip over it, 
+                // we just need to append the RSSI message after it
+                i += PPRZ_PONG_LENGTH; // append the rssi message after pong message
+                    
+                __pdata uint8_t ck_a_tx;
+                __pdata uint8_t ck_b_tx;
+                ck_a_tx = 0; //Checksum A to initial value
+                ck_b_tx = 0; //Checksum B to initial value                     
+                pbuf[i] = PPRZ_STX; // Add the STX common header byte identifier
+                i++;
+
+                pbuf[i] = PPRZ_RSSI_LENGTH; // Add and assign MSG len
+                ck_a_tx += pbuf[i];
+                ck_b_tx += ck_a_tx;
+                i++;
+
+#if defined PPRZLINK_1_GEC || defined PPRZLINK_2_GEC
+                pbuf[i] = PPRZ_CRYPTO_BYTE_PLAINTEXT; // crypto byte (plaintex)
+                ck_a_tx += pbuf[i];
+                ck_b_tx += ck_a_tx;
+                i++;
+#endif // GEC only
+
+                pbuf[i] = rx_ac_id; // Add SENDER ID
+                ck_a_tx += pbuf[i];
+                ck_b_tx += ck_a_tx;
+                i++;
+
+#if defined PPRZLINK_2 || defined PPRZLINK_2_GEC //for Pprzlink v2.0 only
+                // Note that DESTINATION ID is typically zero for GCS.
+                // Enhange current sourcecode at will if you want to have different behaviour
+                // For example (mis)use the sender_id variable that is set by an AT command
+                // and use that variable here instead of fixed define PPRZ_GCS_ID
+                pbuf[i] = PPRZ_GCS_ID; // DESTINATION ID. Typically zero for GCS, fix the code at will if you want to have different behaviour
+                ck_a_tx += pbuf[i];
+                ck_b_tx += ck_a_tx;
+                i++;
+
+                pbuf[i] = PPRZ_TELEMETRY_ID; // class and component ID 4bit nibble (1 for telemetry)
+                ck_a_tx += pbuf[i];
+                ck_b_tx += ck_a_tx;
+                i++;
+
+#endif // PPRZLINK_2 or PPRZLINK_2_GEC
+
+                pbuf[i] = PPRZ_RSSI_ID; // MSG ID
+                ck_a_tx += pbuf[i];
+                ck_b_tx += ck_a_tx;
+                i++;
+
+                pbuf[i] = remote_statistics.average_rssi; // remote rssi (AC)
+
+                ck_a_tx += pbuf[i];
+                ck_b_tx += ck_a_tx;
+                i++;
+
+                pbuf[i] = settings.transmit_power; // tx power
+                ck_a_tx += pbuf[i];
+                ck_b_tx += ck_a_tx;
+                i++;
+
+                pbuf[i] = statistics.average_rssi; // local rssi (Typically the GCS)
+                ck_a_tx += pbuf[i];
+                ck_b_tx += ck_a_tx;
+                i++;
+
+                pbuf[i] = statistics.average_noise; // local  noise (Typically the GCS)
+                ck_a_tx += pbuf[i];
+                ck_b_tx += ck_a_tx;
+                i++;
+
+                pbuf[i] = remote_statistics.average_noise; // remote noise (AC)
+                ck_a_tx += pbuf[i];
+                ck_b_tx += ck_a_tx;
+                i++;
+
+                pbuf[i] = ck_a_tx;
+                i++;
+                pbuf[i] = ck_b_tx;
+                i++;
+
+                len = i;
+
+                // break from the loop
+                break;
+              }
+            }
+          }
+        } // feature_pprzlink_rssi
+
+        LED_ACTIVITY = LED_ON;
+        serial_write_buf(pbuf, len);
+        LED_ACTIVITY = LED_OFF;
+
 #endif // INCLUDE_AES
           
-        }
       }
-      continue;
     }
+    continue;
+  }
     
     // see how many 16usec ticks have passed and update
     // the tdm state machine. We re-fetch tnow as a bad
@@ -693,7 +878,7 @@ tdm_serial_loop(void)
       continue;
     }
     
-    // sample the background noise when it is out turn to
+    // sample the background noise when it is our turn to
     // transmit, but we are not transmitting,
     // averaged over around 4 samples
     statistics.average_noise = (radio_current_rssi() + 3*(uint16_t)statistics.average_noise)/4;
@@ -714,7 +899,6 @@ tdm_serial_loop(void)
       // can't fit the trailer in with a byte to spare
       continue;
     }
-    //max_xmit -= PACKET_OVERHEAD;
     max_xmit -= sizeof(trailer)+1;
     
 #ifdef INCLUDE_AES
@@ -767,10 +951,11 @@ tdm_serial_loop(void)
     trailer.bonus = (tdm_state == TDM_RECEIVE);
     trailer.resend = packet_is_resend();
     
-    if (tdm_state == TDM_TRANSMIT &&
-            len == 0 &&
-            send_statistics &&
-            max_xmit >= sizeof(statistics)) {
+    // if scheduled, force a statistics control packet even if user data exists
+    if (tdm_state == TDM_TRANSMIT && force_stats_send && max_xmit >= sizeof(statistics)) {
+      
+      force_stats_send = 0;
+
       // send a statistics packet
       send_statistics = 0;
       memcpy(pbuf, &statistics, sizeof(statistics));
@@ -920,7 +1105,7 @@ tdm_build_timing_table(void)
       printf("{ %u, %u, %u },\n",
             (unsigned)(radio_air_rate()),
             (unsigned)(latency_sum/j),
-            (unsigned)(per_byte_sum/j));
+        PARAM_MAX_WINDOW    (unsigned)(per_byte_sum/j));
     }
   }
   feature_golay = golay_saved;
@@ -1015,13 +1200,13 @@ tdm_init(void)
 	}
 
 	// set the silence period to two times the packet latency
-        silence_period = 2*packet_latency;
+  silence_period = 2*packet_latency;
 
-        // set the transmit window to allow for 3 full sized packets
+  // set the transmit window to allow for 3 full sized packets
 	window_width = 3*(packet_latency+(max_data_packet_length*(uint32_t)ticks_per_byte));
 
-        // min listen time is 5ms
-        lbt_min_time = LBT_MIN_TIME_USEC/16;
+  // min listen time is 5ms
+  lbt_min_time = LBT_MIN_TIME_USEC/16;
         
 	// if LBT is enabled, we need at least 3*5ms of window width
 	if (lbt_rssi != 0) {
@@ -1039,7 +1224,7 @@ tdm_init(void)
 		window_width = param_get(PARAM_MAX_WINDOW)*(1000/16);
 	}
 
-	// make sure it fits in the 13 bits of the trailer window
+	// to make sure it fits in the 13 bits of the trailer window
 	if (window_width > 0x1fff) {
 		window_width = 0x1fff;
 	}

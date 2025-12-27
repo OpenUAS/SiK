@@ -28,13 +28,9 @@
 
 ///
 /// @file	board_3dr1060.h
-///
-///
+///		Board-specific definitions for the 3DR1060 board
 ///
 
-/// @file	board.h
-///		Board definitions for the 3DR1060 board
- 
 #ifndef _BOARD_3DR1060_H
 #define _BOARD_3DR1060_H
 

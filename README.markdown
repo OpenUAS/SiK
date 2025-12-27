@@ -16,6 +16,9 @@ Currently, it supports the following boards:
 
  - HopeRF HM-TRP
  - HopeRF RF50-DEMO
+ - RFD868
+ - RFD868u
+ - RFD868p
  - RFD900
  - RFD900u
  - RFD900p
@@ -27,6 +30,8 @@ Currently the firmware components include:
 
  - A bootloader with support for firmware upgrades over the serial interface.
  - Radio firmware with support for parsing AT commands, storing parameters and FHSS/TDM functionality
+ - Option to have Flex Frequency independant of bootloader
+ - PPRZLink RSSI report
 
 ### AT commands
 

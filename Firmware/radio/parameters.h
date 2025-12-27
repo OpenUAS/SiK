@@ -62,10 +62,15 @@ enum ParamID {
 	PARAM_MANCHESTER,		// enable manchester encoding
 	PARAM_RTSCTS,			// enable hardware flow control
 	PARAM_MAX_WINDOW,		// The maximum window size allowed
-#ifdef INCLUDE_AES
-  PARAM_ENCRYPTION,     // no Enycryption (0), 128 or 256 bit key
+	PARAM_PPRZLINK,			// if 1 then inject RSSI PPRZLINK packet into the incoming data stream (PPRZLINK version has to be defined)
+	PARAM_PPRZLINK_SENDER_ID, // optional Pprzlink sender ID (0 by default)
+#ifdef FLEX_FREQ
+	PARAM_MAIN_FREQ,		// Be able to override override BOARD_FREQUENCY_REG with 0x43, 0x47, 0x86 or 0x91
 #endif
-	PARAM_MAX				// must be last
+#ifdef INCLUDE_AES
+  PARAM_ENCRYPTION,     	// no Encryption (0), 128 or 256 bit key
+#endif
+	PARAM_MAX				// must be last in this enum list
 };
 
 #define PARAM_FORMAT_CURRENT	0x1aUL				///< current parameter format ID
@@ -133,15 +138,15 @@ uint32_t constrain(__pdata uint32_t v, __pdata uint32_t min, __pdata uint32_t ma
 extern bool calibration_set(uint8_t idx, uint8_t value) __reentrant;
 extern uint8_t calibration_get(uint8_t level) __reentrant;
 extern uint8_t calibration_force_get(uint8_t idx) __reentrant;
-extern bool calibration_lock() __reentrant;
+extern bool calibration_lock(void) __reentrant;
 #endif // BOARD_rfd900a
 
 
 #if defined BOARD_mro900
 extern bool calibration_set(uint8_t value) __reentrant;
-extern uint8_t calibration_get() __reentrant;
-extern uint8_t calibration_force_get() __reentrant;
-extern bool calibration_lock() __reentrant;
+extern uint8_t calibration_get(void) __reentrant;
+extern uint8_t calibration_force_get(void) __reentrant;
+extern bool calibration_lock(void) __reentrant;
 #endif // BOARD_mro900
 
 

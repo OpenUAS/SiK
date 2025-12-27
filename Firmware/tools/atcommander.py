@@ -17,39 +17,43 @@ class ATCommandSet(object):
     # AT commands that are implemented in this class
     AT_SHOW_BRD_TYPE	= 'I2'
     AT_SHOW_BRD_FREQ	= 'I3'
-    AT_SHOW_BRD_VER	= 'I4'
-    AT_SHOW_PARAM	= 'I5'
-    AT_EXIT		= 'O'
-    AT_PARAM		= 'S'
-    AT_REBOOT		= 'Z'
-    AT_PARAM_WRITE	= '&W'
+    AT_SHOW_BRD_VER	    = 'I4'
+    AT_SHOW_PARAM	    = 'I5'
+    AT_EXIT		        = 'O'
+    AT_PARAM		    = 'S'
+    AT_REBOOT		    = 'Z'
+    AT_PARAM_WRITE	    = '&W'
     # AT commands yet to be implemented here
     AT_SHOW_VER_LONG	= 'I0'
-    AT_SHOW_VER		= 'I1'
-    AT_SHOW_TDM		= 'I6'
-    AT_SHOW_RSSI	= 'I7'
+    AT_SHOW_VER		    = 'I1'
+    AT_SHOW_TDM		    = 'I6'
+    AT_SHOW_RSSI	    = 'I7'
     AT_PARAM_FACTORY	= '&F'
-    AT_DEBUG_RSSI	= '&T=RSSI'
-    AT_DEBUG_TDM	= '&T=TDM'
-    AT_DEBUG_OFF	= '&T'
+    AT_DEBUG_RSSI	    = '&T=RSSI'
+    AT_DEBUG_TDM	    = '&T=TDM'
+    AT_DEBUG_OFF	    = '&T'
     
     # Parameters are gotten with AT_PARAM + PARAM_* + '?"
     # Parameters are set with AT_PARAM + PARAM_* + '=' + value
-    PARAM_FORMAT	= 0
-    PARAM_SERIAL_SPEED	= 1
-    PARAM_AIR_SPEED	= 2
-    PARAM_NETID		= 3
-    PARAM_TXPOWER	= 4
-    PARAM_ECC		= 5
-    PARAM_MAVLINK	= 6
-    PARAM_OPPRESEND	= 7
-    PARAM_MIN_FREQ	= 8
-    PARAM_MAX_FREQ	= 9
-    PARAM_NUM_CHANNELS	= 10
-    PARAM_DUTY_CYCLE	= 11
-    PARAM_LBT_RSSI	= 12
-    PARAM_MANCHESTER	= 13
-    PARAM_RTSCTS	= 14
+    PARAM_FORMAT	         = 0
+    PARAM_SERIAL_SPEED       = 1
+    PARAM_AIR_SPEED	         = 2
+    PARAM_NETID		         = 3
+    PARAM_TXPOWER	         = 4
+    PARAM_ECC		         = 5
+    PARAM_MAVLINK	         = 6
+    PARAM_OPPRESEND	         = 7
+    PARAM_MIN_FREQ	         = 8
+    PARAM_MAX_FREQ	         = 9
+    PARAM_NUM_CHANNELS       = 10
+    PARAM_DUTY_CYCLE         = 11
+    PARAM_LBT_RSSI           = 12
+    PARAM_MANCHESTER         = 13
+    PARAM_RTSCTS             = 14
+    PARAM_MAX_WINDOW         = 15
+    PARAM_PPRZLINK           = 16		
+    PARAM_PPRZLINK_SENDER_ID = 17
+    PARAM_MAIN_FREQ          = 18
     
     ### Internals ###
     
@@ -238,7 +242,12 @@ if __name__ == '__main__':
                   'duty' : ATCommandSet.PARAM_DUTY_CYCLE, 
                   'lbtrssi' : ATCommandSet.PARAM_LBT_RSSI, 
                   'manchester' : ATCommandSet.PARAM_MANCHESTER, 
-                  'rtscts' : ATCommandSet.PARAM_RTSCTS }
+                  'rtscts' : ATCommandSet.PARAM_RTSCTS, 
+                  'maxwindow' :  ATCommandSet.PARAM_MAX_WINDOW, 
+                  'pprzlink' : ATCommandSet.PARAM_PPRZLINK,		
+                  'pprzlinksenderid' : ATCommandSet.PARAM_PPRZLINK_SENDER_ID,
+                  'mainfreq' : ATCommandSet.PARAM_MAIN_FREQ           
+                }
     
     # Grok arguments
     parser = argparse.ArgumentParser(description='Change settings on local and remote radio.',

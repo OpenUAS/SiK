@@ -76,8 +76,11 @@ extern void    DMA_ISR(void)    __interrupt(INTERRUPT_DMA0);
 #endif // INCLUDE_AES
 
 //@}
-
+#ifdef FLEX_FREQ
+__code const char g_banner_string[] = "SiK " stringify(APP_VERSION_HIGH) "." stringify(APP_VERSION_LOW) " on " BOARD_NAME " with FlexFreq and PPRZLink";
+#else
 __code const char g_banner_string[] = "SiK " stringify(APP_VERSION_HIGH) "." stringify(APP_VERSION_LOW) " on " BOARD_NAME;
+#endif
 __code const char g_version_string[] = stringify(APP_VERSION_HIGH) "." stringify(APP_VERSION_LOW);
 
 __pdata enum BoardFrequency	g_board_frequency;	///< board info from the bootloader
@@ -93,11 +96,13 @@ static void radio_init(void);
 
 /// statistics for radio and serial errors
 __pdata struct error_counts errors;
-__pdata struct statistics statistics, remote_statistics;
+__pdata volatile struct statistics statistics, remote_statistics;
 
 /// optional features
 bool feature_golay;
 uint8_t feature_mavlink_framing;
+uint8_t feature_pprzlink_rssi;
+uint8_t rx_ac_id;
 bool feature_rtscts;
 
 void
@@ -110,9 +115,26 @@ main(void)
 	// Stash board info from the bootloader before we let anything touch
 	// the SFRs.
 	//
+#ifndef FLEX_FREQ
 	g_board_frequency = BOARD_FREQUENCY_REG;
+#endif
 	g_board_bl_version = BOARD_BL_VERSION_REG;
 
+#ifdef FLEX_FREQ
+    // Parameter to override the bootloader BOARD_FREQUENCY_REG
+    g_board_frequency = param_get(PARAM_MAIN_FREQ);
+    switch(g_board_frequency) {
+    	case FREQ_433:
+    	case FREQ_470:
+    	case FREQ_868:
+    	case FREQ_915:
+    		break;
+    	default: // Don't override (the default parameter value is FREQ_NONE)
+    		g_board_frequency = BOARD_FREQUENCY_REG;
+	}
+#endif
+//TODO: What is this below?
+//95a395bdb8bb656bcd1ecbd0a7909c69ef04f427
 	// Load parameters from flash or defaults
 	// this is done before hardware_init() to get the serial speed
 	if (!param_load())
@@ -122,6 +144,9 @@ main(void)
 	feature_mavlink_framing = param_get(PARAM_MAVLINK);
 	feature_golay = param_get(PARAM_ECC)?true:false;
 	feature_rtscts = param_get(PARAM_RTSCTS)?true:false;
+	feature_pprzlink_rssi = param_get(PARAM_PPRZLINK);
+	rx_ac_id = 0; // zero the ac_id just to be sure
+    rx_ac_id = param_get(PARAM_PPRZLINK_SENDER_ID);//Todo maybe not needed here but at other spot?
 
 	// Do hardware initialisation.
 	hardware_init();
@@ -336,7 +361,11 @@ radio_init(void)
 	case FREQ_868:
 		freq_min = 868000000UL;
 		freq_max = 870000000UL;
+#ifdef FLEX_FREQ
+		txpower = 20;
+#else
 		txpower = 10;
+#endif
 		num_fh_channels = 10;
 		break;
 	case FREQ_915:
@@ -381,12 +410,22 @@ radio_init(void)
 		freq_max = constrain(freq_max, 450000000UL, 490000000UL);
 		break;
 	case FREQ_868:
+#ifdef FLEX_FREQ
+		freq_min = constrain(freq_min, 849000000UL, 935000000UL);
+		freq_max = constrain(freq_max, 849000000UL, 935000000UL);
+#else
 		freq_min = constrain(freq_min, 849000000UL, 889000000UL);
 		freq_max = constrain(freq_max, 849000000UL, 889000000UL);
+#endif
 		break;
 	case FREQ_915:
+#ifdef FLEX_FREQ
+		freq_min = constrain(freq_min, 849000000UL, 935000000UL);
+		freq_max = constrain(freq_max, 849000000UL, 935000000UL);
+#else
 		freq_min = constrain(freq_min, 868000000UL, 935000000UL);
 		freq_max = constrain(freq_max, 868000000UL, 935000000UL);
+#endif
 		break;
 	default:
 		panic("bad board frequency %d", g_board_frequency);

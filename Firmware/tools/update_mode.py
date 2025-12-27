@@ -17,7 +17,7 @@ if len(args) == 0:
 
 
 def update_mode(device):
-    '''put a HM-TRP into update mode'''
+    '''put a SiK radio into update mode'''
     port = serial.Serial(device, opts.baudrate, timeout=0,
                      dsrdtr=opts.dsrdtr, rtscts=opts.rtscts, xonxoff=opts.xonxoff)
     ser = fdpexpect.fdspawn(port.fileno(), logfile=sys.stdout)
@@ -25,7 +25,7 @@ def update_mode(device):
     time.sleep(1)
     ser.send('\r\nATI\r\n')
     try:
-        ser.expect(['OK','SiK .* on HM-TRP'], timeout=2)
+        ser.expect(['OK','SiK .*'], timeout=2)
     except fdpexpect.TIMEOUT:
         print("timeout")
         return

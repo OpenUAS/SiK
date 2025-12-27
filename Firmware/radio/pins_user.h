@@ -59,8 +59,8 @@
 
 enum pin_state { PIN_OUTPUT=true, PIN_INPUT=false,
 				 PIN_HIGH=true,   PIN_LOW=false,
-				 PIN_NULL=0xFF,   PIN_MIRROR_NULL=0xFFFFFFFF,
-				 PIN_ERROR=0x7F };
+				 PIN_NULL=(uint8_t)0xFF,   PIN_MIRROR_NULL=(int)0xFFFFFFFF,
+				 PIN_ERROR=(uint8_t)0x7F };
 
 /// In-ROM parameter info table. Changed by ATP commands
 /// When changing this structure, PINS_USER_INFO_DEFAULT and param_default() need updating
@@ -83,7 +83,7 @@ extern bool pins_user_get_io(__pdata uint8_t pin);
 extern bool pins_user_set_value(__pdata uint8_t pin, bool high_low);
 extern bool pins_user_get_value(__pdata uint8_t pin);
 extern uint8_t pins_user_get_adc(__pdata uint8_t pin);
-extern void pins_user_check();
+extern void pins_user_check(void);
 #endif // #if PIN_MAX > 0
 
 #endif	// _PINS_H_

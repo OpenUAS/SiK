@@ -67,6 +67,7 @@ static void	at_ampersand(void);
 static void	at_p(void);
 static void	at_plus(void);
 static void at_m(void);
+static void at_parse_number(void);
 
 #pragma save
 #pragma nooverlay
@@ -293,7 +294,7 @@ __xdata uint32_t	at_num;
   parse a number at idx putting the result in at_num
  */
 static void
-at_parse_number() __reentrant
+at_parse_number(void) __reentrant
 {
 	register uint8_t c;
 

@@ -74,3 +74,84 @@ extern void packet_inject(__xdata uint8_t *buf, __pdata uint8_t len);
 #define MAVLINK10_STX 254
 #define MAVLINK20_STX 253
 
+#define PPRZLINK_2
+
+#if defined PPRZLINK_1 || defined PPRZLINK_2 || defined PPRZLINK_1_GEC || PPRZLINK_2_GEC
+
+#define PPRZ_GCS_ID 0
+#define PPRZ_TELEMETRY_ID 1
+
+#ifdef PPRZLINK_1
+  #define PPRZ_STX  0x99
+  #define PPRZ_RSSI_ID 39
+  #define PPRZ_RSSI_LENGTH 11 // 5 message content bytes and 6 overhead bytes
+  #define PPRZ_PONG_ID 3
+  #define PPRZ_PONG_LENGTH 6 // 1 stx + 2 len + 3 sender id + 4 msg id + 5 chksm A + 6 chksm B
+  #define PPRZ_LENGTH_IDX 1 // offset from the start of the buffer
+  #define PPRZ_SENDER_ID_IDX 2 // offset from the start of the buffer
+  #define PPRZ_MSG_ID_IDX 3 // offset from the start of the buffer
+#endif // PPRZLINK 1.0
+
+/* The structure of a PPRZLINK 2 message
+
+   PPRZLINK v2
+   PPRZ-message: ABCxxxxxxxDE
+   0 A PPRZ_STX (0x99)
+   1 B LENGTH (A->E)
+    C PPRZ_DATA
+   2    SOURCE (~sender_ID)
+   3    DESTINATION (can be a broadcast ID)
+   4    CLASS/COMPONENT
+        bits 0-3: 16 class ID available
+        bits 4-7: 16 component ID available
+   5    MSG_ID
+   6    MSG_PAYLOAD
+      . DATA (messages.xml)
+    D PPRZ_CHECKSUM_A (sum[B->C])
+    E PPRZ_CHECKSUM_B (sum[ck_a])
+    
+*/
+
+// pprzlink markers
+#ifdef PPRZLINK_2
+  #define PPRZ_STX  0x99
+  #define PPRZ_RSSI_ID 39
+  #define PPRZ_RSSI_LENGTH 13 // we have 5 extra bytes over the default overhead of 8 bytes of a message
+  #define PPRZ_PONG_ID 3
+  #define PPRZ_PONG_LENGTH 8 // 1 stx + 2 len + 3 sender id + 4 dest id + 5 class id + 6 msg id + 7 chksm A + 8 chksm B
+  #define PPRZ_LENGTH_IDX 1 // offset from the start of the buffer
+  #define PPRZ_SENDER_ID_IDX 2 // offset from the start of the buffer
+  #define PPRZ_MSG_ID_IDX 5 // offset from the start of the buffer
+#endif // PPRZLINK 2.0
+
+#ifdef PPRZLINK_1_GEC
+  // For Pprzlink 1.0 only
+  // we have an extra crypto byte at the beginning
+  #define PPRZ_STX  0x99
+  #define PPRZ_RSSI_ID 39
+  #define PPRZ_RSSI_LENGTH 12 // 5 bytes payload + 7 bytes overhead
+  #define PPRZ_PONG_LENGTH 27 // encrypted PONG length
+  #define PPRZ_LENGTH_IDX 1 // offset from the start of the buffer
+  #define PPRZ_CRYPTO_BYTE_IDX 2 // offset from the start of the buffer
+  #define PPRZ_SENDER_ID_IDX 3 // offset from the start of the buffer
+  #define PPRZ_CRYPTO_BYTE_PLAINTEXT 0xaa // plaintext value
+  #define PPRZ_CRYPTO_BYTE_ENCRYPTED 0x55 // encrypted message
+  #define PPRZ_MSG_ID_IDX 8 // offset from the start of the buffer
+#endif // PPRZLINK 1.0 encrypted
+
+#ifdef PPRZLINK_2_GEC
+  // For Pprzlink 2.0 only
+  // we have an extra crypto byte at the beginning
+  #define PPRZ_STX  0x99
+  #define PPRZ_RSSI_ID 39
+  #define PPRZ_RSSI_LENGTH 14 // 5 bytes payload + 9 bytes overhead
+  #define PPRZ_PONG_LENGTH 29 // encrypted PONG length
+  #define PPRZ_LENGTH_IDX 1 // offset from the start of the buffer
+  #define PPRZ_CRYPTO_BYTE_IDX 2 // offset from the start of the buffer
+  #define PPRZ_SENDER_ID_IDX 3 // offset from the start of the buffer
+  #define PPRZ_CRYPTO_BYTE_PLAINTEXT 0xaa // plaintext value
+  #define PPRZ_CRYPTO_BYTE_ENCRYPTED 0x55 // encrypted message
+  #define PPRZ_MSG_ID_IDX 10 // offset from the start of the buffer
+#endif // PPRZLINK 2.0 encrypted
+
+#endif // Pprzlink

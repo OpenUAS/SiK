@@ -74,6 +74,8 @@ extern __pdata uint8_t pdata_canary;
 extern bool feature_golay;
 extern bool feature_opportunistic_resend;
 extern uint8_t feature_mavlink_framing;
+extern uint8_t feature_pprzlink_rssi;
+extern uint8_t rx_ac_id;
 extern bool feature_rtscts;
 
 /// System clock frequency
@@ -137,7 +139,7 @@ struct statistics {
 	uint8_t average_noise;
 	uint16_t receive_count;
 };
-__pdata extern struct statistics statistics, remote_statistics;
+__pdata extern volatile struct statistics statistics, remote_statistics;
 
 struct error_counts {
 	uint16_t rx_errors;		///< count of packet receive errors
@@ -171,7 +173,7 @@ extern bool radio_preamble_detected(void);
 /// @param length		Packet length to be transmitted; assumes
 ///				the data is already present in the FIFO.
 /// @param timeout_ticks	The number of ticks to wait before assiming
-///				that transmission has failed.
+///				remote_statisticsthat transmission has failed.
 ///
 /// @return			true if packet sent successfully
 ///
@@ -312,8 +314,8 @@ extern void radio_set_diversity(enum DIVERSITY_Enum state);
 #if defined BOARD_mro900
 
 extern void radio_set_oscillator_capacitance(uint8_t capacitance);
-extern void radio_set_output_clock_freq();
-extern uint8_t radio_get_oscillator_capacitance();
+extern void radio_set_output_clock_freq(void);
+extern uint8_t radio_get_oscillator_capacitance(void);
 
 #endif // BOARD_mro900
 

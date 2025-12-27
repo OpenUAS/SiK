@@ -27,6 +27,7 @@
 #
 # Common rules and targets for the HopeRF radio apps
 #
+PPRZLINK_VERSION ?= PPRZLINK_2
 
 ifeq ($(BOARD),)
 $(error Must define BOARD before attempting to build)

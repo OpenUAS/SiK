@@ -49,27 +49,42 @@
 #endif // INCLUDE_AES
 
 /// In-ROM parameter info table.
+/// If FLEX_FREQ is defined some defaults are different
 ///
 __code const struct parameter_info {
 	const char	*name;
 	param_t		default_value;
 } parameter_info[PARAM_MAX] = {
 	{"FORMAT",         PARAM_FORMAT_CURRENT},
-	{"SERIAL_SPEED",   57}, // match APM default of 57600
-	{"AIR_SPEED",      64}, // relies on MAVLink flow control
-	{"NETID",          25},
-	{"TXPOWER", 	   20},
-	{"ECC",             0},
-	{"MAVLINK",         1},
-	{"OPPRESEND",       0},
-	{"MIN_FREQ",        0},
-	{"MAX_FREQ",        0},
-	{"NUM_CHANNELS",    0},
-	{"DUTY_CYCLE",    100},
-	{"LBT_RSSI",        0},
-	{"MANCHESTER",      0},
-	{"RTSCTS",          0},
-	{"MAX_WINDOW",    131},
+	{"SERIAL_SPEED",      57}, // match APM/PPRZ default of 57600
+#ifdef FLEX_FREQ
+	{"AIR_SPEED",         96},
+#else	
+	{"AIR_SPEED",         64}, // relies on MAVLink flow control
+#endif
+	{"NETID",             25},
+	{"TXPOWER",           20},
+	{"ECC",                0},
+#ifdef FLEX_FREQ
+	{"MAVLINK",            0},
+#else
+	{"MAVLINK",            1},
+#endif
+	{"OPPRESEND",          0},
+	{"MIN_FREQ",           0},
+	{"MAX_FREQ",           0},
+	{"NUM_CHANNELS",       0},
+	{"DUTY_CYCLE",       100},
+	{"LBT_RSSI",           0},
+	{"MANCHESTER",         0},
+	{"RTSCTS",             0},
+	{"MAX_WINDOW",       131},
+	{"PPRZLINK",           1},
+	{"PPRZLINK_SENDER_ID", 0},
+#ifdef FLEX_FREQ
+	{"MAIN_FREQ", FREQ_NONE}, //Note that the mainfreq is not overridden by default, we're oh so polite ;)
+#endif
+
 #ifdef INCLUDE_AES
 	{"ENCRYPTION_LEVEL", 0}, // no Enycryption (0), 128 or 256 bit key
 #endif
@@ -119,8 +134,32 @@ typedef char p2eCheck[(PIN_FLASH_END < PARAM_E_FLASH_START) ? 0 : -1];
 // Check to make sure we dont overflow off the page
 typedef char endCheck[(PARAM_E_FLASH_END < 1023) ? 0 : -1];
 
+/* TODO: remove when code works
+-PARAM_FORMAT
+-PARAM_SERIAL_SPEED
+-PARAM_AIR_SPEED
+-PARAM_NETID
+-PARAM_TXPOWER
+-PARAM_ECC
+-PARAM_MAVLINK
+-PARAM_OPPRESEND
+PARAM_MIN_FREQ
+PARAM_MAX_FREQ
+PARAM_NUM_CHANNELS
+PARAM_DUTY_CYCLE
+PARAM_LBT_RSSI
+PARAM_MANCHESTER
+PARAM_RTSCTS
+-PARAM_MAX_WINDOW
+-PARAM_PPRZLINK
+PARAM_PPRZLINK_SENDER_ID
+PARAM_MAIN_FREQ
+PARAM_ENCRYPTION
+PARAM_MAX
+*/
+
 static bool
-param_check(__pdata enum ParamID id, __data uint32_t val)
+param_check(__pdata volatile enum ParamID id, __data uint32_t val)
 {
 	// parameter value out of range - fail
 	if (id >= PARAM_MAX)
@@ -166,6 +205,25 @@ param_check(__pdata enum ParamID id, __data uint32_t val)
 		if (val > 131)
 			return false;
 		break;
+
+	case PARAM_PPRZLINK:
+	  // allowed values are {0,1}
+		if (val > 1)
+			return false;
+		break;
+
+	case PARAM_PPRZLINK_SENDER_ID:
+		// allowed values are {0..255}
+		if (val > 255)
+			return false;
+		break;
+		
+//#ifdef FLEX_FREQ
+//  case PARAM_MAIN_FREQ:
+	//		if ((val != 0x43) || (val != 0x47) || (val != 0x86) || (val != 0x91))
+	//			return false;
+//		break;
+//#endif
 
 	default:
 		// no sanity check for this value
@@ -216,6 +274,16 @@ param_set(__data enum ParamID param, __pdata param_t value)
 		feature_rtscts = value?true:false;
 		value = feature_rtscts?1:0;
 		break;
+
+	case PARAM_PPRZLINK:
+		feature_pprzlink_rssi = (uint8_t) value;
+		value = feature_pprzlink_rssi;
+		break;
+
+	case PARAM_PPRZLINK_SENDER_ID:
+	  	rx_ac_id = (uint8_t) value;
+	  	value = rx_ac_id;
+	  	break;
 
 	default:
 		break;
@@ -285,6 +353,7 @@ __critical {
 	}
 
 	for (i = 0; i < PARAM_MAX; i++) {
+//?? USE this maybe instead:  for (i = 0; i < sizeof(parameter_values); i++) {
 		if (!param_check(i, parameter_values[i])) {
 			parameter_values[i] = parameter_info[i].default_value;
 		}
@@ -323,7 +392,7 @@ __critical {
 	// write pin params
 #if PIN_MAX > 0
   flash_write_scratch(PIN_FLASH_START, sizeof(pin_values));
-	write_params((__xdata uint8_t *)pin_values, PIN_FLASH_START+1, sizeof(pin_values));
+  write_params((__xdata uint8_t *)pin_values, PIN_FLASH_START+1, sizeof(pin_values));
 #endif
 
   // write encryption params
@@ -455,7 +524,7 @@ calibration_force_get(uint8_t idx) __reentrant
 }
 
 bool
-calibration_lock() __reentrant
+calibration_lock(void) __reentrant
 {
 	uint8_t idx;
 	uint8_t crc = 0;
@@ -526,20 +595,20 @@ calibration_set(uint8_t value) __reentrant
 }
 
 uint8_t
-calibration_get() __reentrant
+calibration_get(void) __reentrant
 {
 	PSBANK = 0x33;
 	return calibration;
 }
 
 uint8_t
-calibration_force_get() __reentrant
+calibration_force_get(void) __reentrant
 {
 	return flash_read_byte(FLASH_CALIBRATION_OSC_HIGH);
 }
 
 bool
-calibration_lock() __reentrant
+calibration_lock(void) __reentrant
 {
 
 	PSBANK = 0x33;
@@ -561,7 +630,7 @@ calibration_lock() __reentrant
 
 
 #ifdef INCLUDE_AES
-// Used to convert individial Hex digits into Integers
+// Used to convert individual Hex digits into Integers
 //
 uint8_t read_hex_nibble(const uint8_t c) __reentrant
 {
